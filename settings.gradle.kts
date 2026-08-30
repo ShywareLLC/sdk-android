@@ -1,2 +1,17 @@
-// Shyware SDK — Kotlin/Gradle build exposing DPIAHelpers for Stack 6 consumer tests
-rootProject.name = "shyware-sdk-web"
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "shyware-sdk-android"
