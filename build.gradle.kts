@@ -1,7 +1,16 @@
+// No explicit version on com.android.library: this module is included as a
+// subproject by 12 consumer apps (each with its own root-level AGP version
+// via their own version catalog), and Gradle rejects a subproject
+// re-declaring an explicit version for a plugin the including root already
+// manages ("already on the classpath with an unknown version"). Standalone
+// builds of this module get their version from this repo's own
+// settings.gradle.kts pluginManagement block instead.
+// org.jetbrains.kotlin.android is intentionally not applied: AGP 9+ builds
+// Kotlin support in directly, and separately applying that plugin is now a
+// hard error ("no longer required ... since AGP 9.0").
 plugins {
-    id("com.android.library") version "8.7.3"
-    id("org.jetbrains.kotlin.android") version "2.0.21"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
+    id("com.android.library")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 group = "com.sayists.shyware"
@@ -13,7 +22,10 @@ android {
 
     defaultConfig {
         minSdk = 26
-        targetSdk = 36
+        // targetSdk removed: not a valid defaultConfig property for a
+        // library module's DSL under AGP 9+ (compile error, not just a
+        // deprecation) -- it was never meaningful for a library anyway,
+        // only for the manifest-merging application module.
     }
 
     compileOptions {
@@ -21,9 +33,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // kotlinOptions {} removed: AGP 9's built-in Kotlin support no longer
+    // exposes this DSL (see the org.jetbrains.kotlin.android removal
+    // above) -- JVM target is derived from compileOptions above.
 }
 
 dependencies {
