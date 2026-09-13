@@ -111,11 +111,17 @@ class WireClient internal constructor(
     // MARK: - Read
 
     suspend fun getSupply(): WireSupply = withContext(Dispatchers.IO) {
-        get("/supply/${manifest.wire?.assetId ?: ""}")
+        get("/wire/supply")
     }
 
+    /**
+     * The real backend (oneway.ledger.js) is single-asset today and exposes
+     * only `/wire/supply` with no per-asset path segment -- [assetId] is
+     * accepted here for forward compatibility but currently has no effect
+     * server-side.
+     */
     suspend fun getSupply(assetId: String): WireSupply = withContext(Dispatchers.IO) {
-        get("/supply/$assetId")
+        get("/wire/supply")
     }
 
     suspend fun getCanonicalCount(transferId: String): WireCanonicalCount = withContext(Dispatchers.IO) {
@@ -139,7 +145,7 @@ class WireClient internal constructor(
             put("account_commitment", commitment)
             put("wallet_proof", walletProof)
         }.toString().toRequestBody(jsonMediaType)
-        post("/accounts", body)
+        post("/wire/accounts", body)
     }
 
     // MARK: - Transfer
@@ -172,7 +178,7 @@ class WireClient internal constructor(
         }.toString()
 
         val bodyObj = JSONObject().put("tx", txJson).toString().toRequestBody(jsonMediaType)
-        post("/transfers", bodyObj)
+        post("/wire/transfer", bodyObj)
 
         WireSubmissionResult(
             submissionId = submissionId,
@@ -236,7 +242,10 @@ class WireClient internal constructor(
         val req = Request.Builder().url("$base$path").post(body).build()
         http.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) throw ShywareException("HTTP ${resp.code}")
-            return emptyMap()
+            val text = resp.body?.string().orEmpty()
+            if (text.isBlank()) return emptyMap()
+            val obj = org.json.JSONObject(text)
+            return obj.keys().asSequence().associateWith { obj.get(it) }
         }
     }
 }
