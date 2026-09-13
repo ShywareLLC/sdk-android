@@ -167,7 +167,10 @@ class LotsClient private constructor(
         val req = Request.Builder().url("$base$path").post(body).build()
         http.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) throw ShywareException("HTTP ${resp.code}")
-            return emptyMap()
+            val text = resp.body?.string().orEmpty()
+            if (text.isBlank()) return emptyMap()
+            val obj = org.json.JSONObject(text)
+            return obj.keys().asSequence().associateWith { obj.get(it) }
         }
     }
 }
