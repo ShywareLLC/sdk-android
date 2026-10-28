@@ -51,9 +51,6 @@ fun assertSharesManifest(config: ShyConfig) {
     require(config.anonLayer.blackBoxRequired) {
         "anon_layer.black_box_required must be true"
     }
-    require(config.signing.required && config.signing.backend != "none") {
-        "Signing must be required and enabled"
-    }
     requireNotNull(config.governance) { "shyconfig must declare governance settings." }
     requireNotNull(config.execution) { "shyconfig must declare execution settings." }
     val transferLayer = config.governance?.transferLayer

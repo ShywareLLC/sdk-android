@@ -15,6 +15,7 @@ data class BallotReceipt(
     val choice: String,
     val identityHash: String,
     val submittedAtMs: Long = System.currentTimeMillis(),
+    val beaconBlockHash: String = "",
 )
 
 /**

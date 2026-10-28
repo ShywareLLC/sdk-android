@@ -63,9 +63,6 @@ fun assertContractsManifest(config: ShyConfig) {
     for (flow in required) {
         require(flow in config.anonLayer.requiredFlows) { "Missing required flow: $flow" }
     }
-    require(config.signing.required && config.signing.backend != "none") {
-        "Signing must be required and enabled"
-    }
     val block = config.contracts ?: config.financing
     requireNotNull(block) { "shyconfig must declare a contracts (or financing) block." }
     val transferLayer = block.transferLayer

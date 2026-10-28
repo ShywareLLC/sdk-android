@@ -50,9 +50,6 @@ fun assertCustodyManifest(config: ShyConfig) {
     require(config.anonLayer.blackBoxRequired) {
         "anon_layer.black_box_required must be true"
     }
-    require(config.signing.required && config.signing.backend != "none") {
-        "Signing must be required and enabled"
-    }
     requireNotNull(config.custody) { "shyconfig must declare custody settings for shycustody apps." }
     val transferLayer = config.custody?.transferLayer
     require(transferLayer == null || transferLayer == "shywire") {

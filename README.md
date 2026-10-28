@@ -6,6 +6,21 @@ Kotlin/Gradle package for the Shyware SDK — Android client.
 
 ## What it does
 
+The Kotlin domain clients accept unsigned configuration (`signing.required: false`,
+`signing.backend: "none"`). KMS/HSM is optional for period-close attestation;
+identity and device authentication are separate concerns.
+
+Beacon-conditioned voting IDs and receipt checks use SHA-256 over decoded beacon
+bytes followed by decoded nonce bytes. Pass the original `beaconBlockHash` to
+`buildBallot` and `verifyReceipt`; a missing or malformed beacon is rejected.
+Legacy receipts without the original beacon cannot be verified through this path.
+
+`castBallot` uses the server-built submission returned by `/api/vote/cast`. If that
+endpoint returns only an opaque canonical ballot ID, the result has empty nonce,
+beacon and transaction fields, and no recoverable receipt is saved. A receipt is
+saved only when the server returns matching beacon/nonce material and posture
+permits retention. Local draft material is never substituted for a server receipt.
+
 Provides `DPIAHelpers` — a Kotlin library of assertion utilities used to verify structural invariant compliance (two-list write, rejection predicate, count-match) against a live or mock Shyware node from Android/JVM test suites.
 
 The stack-6 DPIA evidence suite runs 14 suites, 385 assertions covering the write-kernel, vote-write, and cover-traffic families.

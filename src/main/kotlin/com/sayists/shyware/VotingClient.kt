@@ -18,6 +18,7 @@ data class BallotResult(
     val ballotNonce: String,
     val identityHash: String,
     val txJson: String,
+    val beaconBlockHash: String = "",
 )
 
 data class ReceiptVerification(
@@ -46,9 +47,6 @@ fun assertVotingManifest(config: ShyConfig) {
         require(flow in config.anonLayer.requiredFlows) { "Missing required flow: $flow" }
     }
     require(config.identity.provider != "none") { "A real identity provider is required" }
-    require(config.signing.required && config.signing.backend != "none") {
-        "Signing must be required and enabled"
-    }
 }
 
 // MARK: - Client
@@ -146,9 +144,9 @@ class VotingClient private constructor(
 
     // MARK: - Build
 
-    fun buildBallot(pollId: String, choice: String, input: IdentityInput): BallotResult {
+    fun buildBallot(pollId: String, choice: String, input: IdentityInput, beaconBlockHash: String = ""): BallotResult {
         val nonce = randomHex(32)
-        val ballotId = sha256hex(nonce)
+        val ballotId = deriveBallotId(beaconBlockHash, nonce)
         val commitment = createIdentityCommitment(manifest, input)
         val identityHash = sha256hex(commitment + pollId)
 
@@ -157,6 +155,7 @@ class VotingClient private constructor(
             put("identity_hash", identityHash)
             put("choice", choice)
             put("ballot_nonce", nonce)
+            put("beacon_block_hash", beaconBlockHash)
             put("timestamp", System.currentTimeMillis() / 1000)
         }
         val txJson = JSONObject().apply {
@@ -170,12 +169,15 @@ class VotingClient private constructor(
             ballotNonce = nonce,
             identityHash = identityHash,
             txJson = txJson,
+            beaconBlockHash = beaconBlockHash,
         )
     }
 
     // MARK: - Submit
 
-    suspend fun submitBallot(pollId: String, choice: String): String = withContext(Dispatchers.IO) {
+    suspend fun submitBallot(pollId: String, choice: String): String = submitBallotResult(pollId, choice).ballotId
+
+    private suspend fun submitBallotResult(pollId: String, choice: String): BallotResult = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("pollId", pollId)
             .put("direction", choice)
@@ -184,9 +186,9 @@ class VotingClient private constructor(
         val req = Request.Builder().url("$base/api/vote/cast").post(body).build()
         http.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) throw ShywareException("HTTP ${resp.code}")
-            // Return server-assigned ballotId so callers use the canonical ID
             val respJson = JSONObject(resp.body?.string() ?: "{}")
-            respJson.optString("ballotId", "")
+            require(!respJson.has("ok") || respJson.optBoolean("ok")) { "Ballot submission rejected" }
+            ballotResultFromResponse(respJson)
         }
     }
 
@@ -200,10 +202,11 @@ class VotingClient private constructor(
     }
 
     suspend fun castBallot(pollId: String, choice: String, input: IdentityInput): BallotResult {
-        val local = buildBallot(pollId, choice, input)
-        val serverBallotId = submitBallot(pollId, choice)
-        val result = if (serverBallotId.isNotBlank()) local.copy(ballotId = serverBallotId) else local
-        if (!effectivePosture().writeOnly) {
+        // This endpoint builds the ballot on the server. Its receipt material
+        // must not be replaced with an unrelated locally generated nonce.
+        createIdentityCommitment(manifest, input)
+        val result = submitBallotResult(pollId, choice)
+        if (!effectivePosture().writeOnly && result.ballotNonce.isNotBlank() && result.beaconBlockHash.isNotBlank()) {
             receiptStore?.save(
                 BallotReceipt(
                     pollId = pollId,
@@ -211,6 +214,7 @@ class VotingClient private constructor(
                     ballotNonce = result.ballotNonce,
                     choice = choice,
                     identityHash = result.identityHash,
+                    beaconBlockHash = result.beaconBlockHash,
                 )
             )
         }
@@ -219,13 +223,13 @@ class VotingClient private constructor(
 
     // MARK: - Verify
 
-    fun verifyReceipt(nonce: String, expectedChoice: String, votes: List<VoteRecord>): ReceiptVerification {
-        val ballotId = sha256hex(nonce)
+    fun verifyReceipt(nonce: String, expectedChoice: String, votes: List<VoteRecord>, beaconBlockHash: String = ""): ReceiptVerification {
+        val ballotId = deriveBallotId(beaconBlockHash, nonce)
         val match = votes.firstOrNull { it.ballotId == ballotId && expectedChoice in it.choices }
         return ReceiptVerification(
             verified = match != null,
             ballotId = ballotId,
-            matchedChoice = match?.choices?.firstOrNull(),
+            matchedChoice = if (match != null) expectedChoice else null,
         )
     }
 
@@ -244,6 +248,23 @@ class VotingClient private constructor(
 }
 
 // MARK: - Utilities
+
+internal fun ballotResultFromResponse(response: JSONObject): BallotResult {
+    val ballotId = response.optString("ballotId", response.optString("ballot_id", ""))
+    require(ballotId.isNotBlank()) { "Submission response has no canonical ballot ID" }
+    val nonce = response.optString("ballotNonce", response.optString("ballot_nonce", ""))
+    val beacon = response.optString("beaconBlockHash", response.optString("beacon_block_hash", ""))
+    if (nonce.isNotBlank() || beacon.isNotBlank()) {
+        require(deriveBallotId(beacon, nonce) == ballotId) { "Submission receipt does not match the canonical ballot ID" }
+    }
+    return BallotResult(
+        ballotId = ballotId,
+        ballotNonce = nonce,
+        identityHash = response.optString("identityHash", response.optString("identity_hash", "")),
+        txJson = "",
+        beaconBlockHash = beacon,
+    )
+}
 
 private val random = SecureRandom()
 

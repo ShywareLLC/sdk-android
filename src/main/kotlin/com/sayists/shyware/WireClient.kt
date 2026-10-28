@@ -75,9 +75,6 @@ fun assertWireManifest(config: ShyConfig) {
     for (flow in required) {
         require(flow in config.anonLayer.requiredFlows) { "Missing required flow: $flow" }
     }
-    require(config.signing.required && config.signing.backend != "none") {
-        "Signing must be required and enabled"
-    }
     requireNotNull(config.wire) { "shyconfig must declare wire settings for shywire apps." }
 }
 
